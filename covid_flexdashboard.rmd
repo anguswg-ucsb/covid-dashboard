@@ -1,0 +1,61 @@
+---
+title: "ggplot2 Brushing"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+source('./helpers.R')
+
+# Initalize data
+covid19  <-  read_covid19()
+today    <-  today_centroids(counties, covid19)
+basemap  <-  basemap(today)
+```
+
+
+
+-----------------------------------------------------------------------
+
+Row
+-------------------------------------
+
+```{r}
+FIP <- today$fips[which.max(today$cases)]
+leafletOutput('covidMap')
+output$covidMap     <- renderLeaflet({ basemap })
+observeEvent(input$covidMap_marker_click, {
+    FIP <<- input$covidMap_marker_click$id
+    output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
+    leafletProxy('covidMap') %>% zoom_to_county(counties, FIP)
+        output$covidTable = renderDT({ make_table2(today, FIP) })
+})
+```
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+
+```{r}
+FIP <- today$fips[which.max(today$cases)]
+dygraphOutput('covidGraph')
+output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
+```
+
+Column {.sidebar data-width=500}
+-------------------------------------
+```{r}
+
+DTOutput('covidTable')
+
+output$covidTable = renderDT({ make_table2(today, FIP) })
+
+ 
+
+```
+
+

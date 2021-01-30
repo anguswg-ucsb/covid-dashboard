@@ -1,6 +1,6 @@
 
 # Data Manipulation
-library(dplyr)    # data.frames
+library(tidyverse)    # data.frames
 library(sf)       # Spatial
 
 # Interactive Data Viz
@@ -8,6 +8,8 @@ library(leaflet)  # Maps
 library(dygraphs) # Charts
 library(DT)       # tables
 library(rvest)    # webscraping
+library(plotly)
+library(zoo)
 
 # Shiny
 library(dqshiny)    # auto complete
@@ -145,7 +147,7 @@ zoom_to_county = function(map, counties, FIP){
     flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
 }
 
-make_table = function(today, FIPS){
+make_table = function(today, FIP){
   myfip = filter(today, fips == FIP)
 
   url = paste0('https://en.wikipedia.org/wiki/',  gsub(" ", "_", myfip$name)) %>%
@@ -182,7 +184,7 @@ make_table2 = function(today, FIP){
             options = list(paging = FALSE, searching = FALSE))
 }
 
-make_table_2 = function(today, FIPS){
+make_table_2 = function(today, FIP){
   myfip  = filter(today, fips == 6037)
 
 # Filter todays data to the state of myfip
@@ -199,4 +201,38 @@ make_table_2 = function(today, FIPS){
 
 }
 
+# COUNTY DAILY CASES GRAPH
+make_graph2 = function(covid19, FIP){
+  new_cases <- covid19 %>%
+    group_by(state, date) %>%
+    summarise(county = county, fips = fips, cases = sum(cases, na.rm = TRUE)) %>%
+    ungroup() %>%
+    group_by(state) %>%
+    mutate(new_cases = cases - lag(cases)) %>%
+    mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right'))
+  subset2 <- new_cases %>% filter(fips == FIP)
+  # Fit and exponetial model for fun
+  # exponential.model <- lm(log(new_cases)~ date, data = subset)
+  # # use the model to predict a what a expoential curve would look like
+  # subset$expCases = ceiling(exp(predict(exponential.model, list(date = subset$date))))
+
+
+  plot_ly(subset2,
+          x = ~date,
+          y = ~new_cases,
+          name = "Daily cases",
+          color = I('aquamarine3'),
+          type = "bar") %>%
+    add_trace(x = ~date, y = ~rolling_mean,
+              type = "scatter",
+              mode = "lines",
+              name = "Rolling mean",
+              color = I('darkcyan')) %>%
+    # add_trace(x = ~date, y = ~expCases,
+    #           type = "scatter",
+    #           mode = "lines",
+    #           name = "Exponential",
+    #           color = I('darkblue')) %>%
+    layout(yaxis = list(title = 'Daily cases'), xaxis = list(title = "Date"), barmode = 'group')
+}
 

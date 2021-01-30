@@ -4,6 +4,19 @@ counties = readRDS("./data/counties.rds")
 covid19 = read_covid19()
 today   = today_centroids(counties, covid19)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 ########################
 ######## DYGRAPH #######
 ########################
