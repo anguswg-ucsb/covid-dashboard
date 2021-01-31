@@ -15,6 +15,7 @@ library(zoo)
 library(dqshiny)    # auto complete
 library(shiny)       # Starting Reactivity
 library(shinythemes) # themes
+library(shinydashboard)
 
 # # county-level timeseries  COVID-19 cases and deaths
 #
@@ -59,7 +60,7 @@ counties = readRDS("counties.rds")
 # Read in COVID-19 Timesries from URL
 read_covid19 = function(){
   url = 'https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv'
-  read.csv(url, stringsAsFactors = FALSE) %>%
+  cc = read.csv(url, stringsAsFactors = FALSE) %>%
     mutate(date = as.Date(date),
            fips = as.numeric(fips),
            name = paste0(county, " County, ", state))
@@ -85,17 +86,14 @@ make_graph = function(covid19, FIP){
   # use the model to predict a what a expoential curve would look like
   subset$expCases = ceiling(exp(predict(exponential.model, list(date = subset$date))))
 
-
-  # !!!! This is were you put you code!!!!
-
   dygraph(data = select(subset, cases, deaths, expCases),
-          main = paste0("COVID-19 Trend: ", subset$name[1]),
+          main = paste0(" ", subset$name[1]),
           ylab = 'Number of Cases/Deaths',
           xlab = 'Date') %>%
     dyHighlight(highlightCircleSize = 4,
                 highlightSeriesBackgroundAlpha = .7,
                 highlightSeriesOpts = list(strokeWidth = 3)) %>%
-    dyOptions(colors = c("darkcyan", "darkred", 'black'))
+    dyOptions(colors = c("darkcyan", "darkred", 'black'), strokeWidth = 3, stackedGraph = TRUE)
 }
 
 basemap = function(today){
@@ -116,9 +114,9 @@ basemap = function(today){
               pal = pal2,
               values = ~cases,
               title = paste("COVID Cases\n", max(today$date)),
-              opacity = 1)
+              opacity = 1) %>%
+    setView(lng = -98, lat= 38, zoom = 4)
 }
-
 
 
 zoom_to_county = function(map, counties, FIP){
@@ -203,36 +201,74 @@ make_table_2 = function(today, FIP){
 
 # COUNTY DAILY CASES GRAPH
 make_graph2 = function(covid19, FIP){
-  new_cases <- covid19 %>%
+  subset2 <- covid19 %>% filter(fips == FIP)
+
+  subset2 <- subset2 %>%
     group_by(state, date) %>%
     summarise(county = county, fips = fips, cases = sum(cases, na.rm = TRUE)) %>%
-    ungroup() %>%
-    group_by(state) %>%
     mutate(new_cases = cases - lag(cases)) %>%
     mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right'))
-  subset2 <- new_cases %>% filter(fips == FIP)
+
   # Fit and exponetial model for fun
   # exponential.model <- lm(log(new_cases)~ date, data = subset)
   # # use the model to predict a what a expoential curve would look like
   # subset$expCases = ceiling(exp(predict(exponential.model, list(date = subset$date))))
 
-
-  plot_ly(subset2,
-          x = ~date,
-          y = ~new_cases,
-          name = "Daily cases",
-          color = I('aquamarine3'),
-          type = "bar") %>%
-    add_trace(x = ~date, y = ~rolling_mean,
-              type = "scatter",
-              mode = "lines",
-              name = "Rolling mean",
-              color = I('darkcyan')) %>%
-    # add_trace(x = ~date, y = ~expCases,
-    #           type = "scatter",
-    #           mode = "lines",
-    #           name = "Exponential",
-    #           color = I('darkblue')) %>%
-    layout(yaxis = list(title = 'Daily cases'), xaxis = list(title = "Date"), barmode = 'group')
+  gg_1 = ggplot(subset2, aes(x = date, y = new_cases)) +
+    geom_bar(col = 'aquamarine4', fill = 'aquamarine3', stat = 'identity') +
+    geom_line(aes(y = rolling_mean), col = "darkgreen", size = 0.7) +
+    labs(title = 'DAILY NEW CASES',
+         x = 'DATE',
+         y = 'NEW CASES',
+         subtitle = 'Data Source: The New York Times') +
+    theme(axis.text.x = element_text(size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10, hjust = 0.5),
+          plot.title = element_text(hjust = 0.5, size = 20),
+          plot.subtitle = element_text(size = 14),
+          legend.title = element_text(face = "bold", size = 10, hjust = 0.5),
+          legend.title.align = 0.5,
+          legend.text = element_text(face = "bold", size = 12))
+ggplotly(gg_1)
+  # plot_ly(subset2,
+  #         x = ~date,
+  #         y = ~new_cases,
+  #         name = "Daily cases",
+  #         color = I('aquamarine3'),
+  #         type = "bar") %>%
+  #   add_trace(x = ~date, y = ~rolling_mean,
+  #             type = "scatter",
+  #             mode = "lines",
+  #             name = "Rolling mean",
+  #             color = I('darkcyan')) %>%
+  #   # add_trace(x = ~date, y = ~expCases,
+  #   #           type = "scatter",
+  #   #           mode = "lines",
+  #   #           name = "Exponential",
+  #   #           color = I('darkblue')) %>%
+  #   layout(yaxis = list(title = 'Daily cases'), xaxis = list(title = "Date"), barmode = 'group')
 }
+
+cases_info = function(covid19){
+  subset3 <- covid19 %>%
+    group_by(date) %>%
+    summarise(deaths = sum(deaths, na.rm = TRUE), cases = sum(cases, na.rm = TRUE)) %>%
+    mutate(new_cases = cases - lag(cases)) %>%
+    arrange(desc(date)) %>%
+    slice_max(1) %>%
+    select(2:4) %>%
+    formatC(format="d", big.mark=",")
+}
+
+death_info = function(covid19){
+  subset4 <- covid19 %>%
+    group_by(date) %>%
+    summarise(deaths = sum(deaths, na.rm = TRUE), cases = sum(cases, na.rm = TRUE)) %>%
+    mutate(new_cases = cases - lag(cases)) %>%
+    mutate(death_rate = 100*round(deaths/cases, 3)) %>%
+    arrange(desc(date)) %>%
+    slice_max(1)
+}
+
 

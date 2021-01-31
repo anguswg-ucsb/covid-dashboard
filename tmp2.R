@@ -43,47 +43,64 @@ new_cases <- covid19 %>%
   mutate(new_cases = cases - lag(cases)) %>%
   mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right'))
 
-covid19 <- covid19 %>%
-  group_by(state) %>%
-  mutate(id = row_number())
+# Fit and exponetial model for fun
+exponential.model <- lm(log(new_cases)~ date, data = subset)
+# use the model to predict a what a expoential curve would look like
+subset$expCases = ceiling(exp(predict(exponential.model, list(date = subset$date))))
 
-new_cases <- new_cases %>%
-  group_by(state) %>%
-  mutate(id = row_number())
-
-subset <- new_cases %>% filter(fips == 6019)
-
+subset <- new_cases %>% filter(fips == 6001)
+plot_ly(subset,
+        x = ~date,
+        y = ~new_cases,
+        name = "Daily cases",
+        color = I('aquamarine3'),
+        type = "bar") %>%
+  add_trace(x = ~date, y = ~rolling_mean,
+            type = "scatter",
+            mode = "lines",
+            name = "Rolling mean",
+            color = I('darkcyan')) %>%
+add_trace(x = ~date, y = ~expCases,
+          type = "scatter",
+          mode = "lines",
+          name = "Exponential",
+          color = I('darkblue')) %>%
+  layout(yaxis = list(title = 'Daily cases'), xaxis = list(title = "Date"), barmode = 'group')
 library(zoo)
 library(plotly)
 
 make_graph2 = function(covid19, FIP){
   new_cases <- covid19 %>%
     group_by(state, date) %>%
-    summarise(cases = sum(cases, na.rm = TRUE)) %>%
+    summarise(county = county, fips = fips, cases = sum(cases, na.rm = TRUE)) %>%
     ungroup() %>%
     group_by(state) %>%
     mutate(new_cases = cases - lag(cases)) %>%
     mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right'))
 
-  subset = filter(covid19, fips == FIP)
-  rownames(subset) <- subset$date
-  rm(new_cases)
   # Fit and exponetial model for fun
-  exponential.model <- lm(log(cases)~ date, data = subset)
+  exponential.model <- lm(log(new_cases)~ date, data = subset)
   # use the model to predict a what a expoential curve would look like
   subset$expCases = ceiling(exp(predict(exponential.model, list(date = subset$date))))
 
-
-  # !!!! This is were you put you code!!!!
-
-  dygraph(data = select(subset, cases, deaths, expCases),
-          main = paste0("COVID-19 Trend: ", subset$name[1]),
-          ylab = 'Number of Cases/Deaths',
-          xlab = 'Date') %>%
-    dyHighlight(highlightCircleSize = 4,
-                highlightSeriesBackgroundAlpha = .7,
-                highlightSeriesOpts = list(strokeWidth = 3)) %>%
-    dyOptions(colors = c("darkcyan", "darkred", 'black'))
+  subset <- new_cases %>% filter(fips == FIPS)
+  plot_ly(subset,
+          x = ~date,
+          y = ~new_cases,
+          name = "Daily cases",
+          color = I('aquamarine3'),
+          type = "bar") %>%
+    add_trace(x = ~date, y = ~rolling_mean,
+              type = "scatter",
+              mode = "lines",
+              name = "Rolling mean",
+              color = I('darkcyan')) %>%
+    add_trace(x = ~date, y = ~expCases,
+              type = "scatter",
+              mode = "lines",
+              name = "Exponential",
+              color = I('darkblue')) %>%
+    layout(yaxis = list(title = 'Daily cases'), xaxis = list(title = "Date"), barmode = 'group')
 }
 new_cases <- covid19 %>%
   group_by(date) %>%
