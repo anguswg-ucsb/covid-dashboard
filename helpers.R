@@ -88,8 +88,8 @@ make_graph = function(covid19, FIP){
 
   dygraph(data = select(subset, cases, deaths, expCases),
           main = paste0(" ", subset$name[1]),
-          ylab = 'Number of Cases/Deaths',
-          xlab = 'Date') %>%
+          ylab = 'CASES/DEATHS',
+          xlab = 'DATE') %>%
     dyHighlight(highlightCircleSize = 4,
                 highlightSeriesBackgroundAlpha = .7,
                 highlightSeriesOpts = list(strokeWidth = 3)) %>%
@@ -183,7 +183,7 @@ make_table2 = function(today, FIP){
 }
 
 make_table_2 = function(today, FIP){
-  myfip  = filter(today, fips == 6037)
+  myfip  = filter(today, fips == FIP)
 
 # Filter todays data to the state of myfip
   mydata = filter(today, state == myfip$state) %>%
@@ -216,9 +216,8 @@ make_graph2 = function(covid19, FIP){
 
   gg_1 = ggplot(subset2, aes(x = date, y = new_cases)) +
     geom_bar(col = 'aquamarine4', fill = 'aquamarine3', stat = 'identity') +
-    geom_line(aes(y = rolling_mean), col = "darkgreen", size = 0.7) +
-    labs(title = 'DAILY NEW CASES',
-         x = 'DATE',
+    geom_line(aes(y = rolling_mean), col = "darkgreen", size = 0.5) +
+    labs(x = 'DATE',
          y = 'NEW CASES',
          subtitle = 'Data Source: The New York Times') +
     theme(axis.text.x = element_text(size = 10),
