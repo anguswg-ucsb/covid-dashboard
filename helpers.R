@@ -10,7 +10,7 @@ library(DT)       # tables
 library(rvest)    # webscraping
 library(plotly)
 library(zoo)
-
+library(scales)
 # Shiny
 library(dqshiny)    # auto complete
 library(shiny)       # Starting Reactivity
@@ -57,6 +57,15 @@ library(shinydashboard)
 #Load Spatial Data
 counties = readRDS("counties.rds")
 
+font = list(
+  family = 'Arial',
+  size = 15,
+  color = 'white')
+label = list(
+  bgcolor = '#232F34',
+  bordercolor = 'transparent',
+  font = font)
+
 # Read in COVID-19 Timesries from URL
 read_covid19 = function(){
   url = 'https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv'
@@ -77,8 +86,8 @@ today_centroids = function(counties, covid_data){
 
 
 basemap = function(today){
-  pal = colorNumeric("viridis", domain = today$size, n = 50)
-  pal2 <- colorNumeric("viridis", domain = today$cases, n = 50)
+  pal = colorNumeric("inferno", reverse= TRUE, domain = today$size, n = 50)
+  pal2 <- colorNumeric("inferno", reverse = TRUE, domain = today$cases, n = 50)
   leaflet(data = today) %>%
     addProviderTiles(providers$CartoDB.Positron) %>%
     addScaleBar("bottomleft") %>%
@@ -181,55 +190,102 @@ make_table_2 = function(today, FIP){
 
 # The graph requires you COVID data and a FIP code as input
 make_graph = function(covid19, FIP){
-
+  FUNC_JSFormatNumber <- "function(x) {return x.toString().replace(/(\\d)(?=(\\d{3})+(?!\\d))/g, '$1,')}"
   subset = filter(covid19, fips == FIP)
   rownames(subset) <- subset$date
 
+  subset <- subset %>% rename(Cases = cases, Deaths = deaths)
   # Fit and exponetial model for fun
-  exponential.model <- lm(log(cases)~ date, data = subset)
+  exponential.model <- lm(log(Cases)~ date, data = subset)
   # use the model to predict a what a expoential curve would look like
-  subset$expCases = ceiling(exp(predict(exponential.model, list(date = subset$date))))
+  subset$Exponential = ceiling(exp(predict(exponential.model, list(date = subset$date))))
 
-  dygraph(data = select(subset, cases, deaths, expCases),
+  dygraph(data = select(subset, Cases, Deaths, Exponential),
           main = paste0(" ", subset$name[1]),
-          ylab = 'CASES/DEATHS',
-          xlab = 'DATE') %>%
-    dyHighlight(highlightCircleSize = 4,
-                highlightSeriesBackgroundAlpha = .7,
-                highlightSeriesOpts = list(strokeWidth = 3)) %>%
-    dyOptions(colors = c("darkcyan", "darkred", 'black'), strokeWidth = 3, stackedGraph = TRUE)
+          ylab = '',
+          xlab = '') %>%
+    dyHighlight(highlightCircleSize = 5,
+                highlightSeriesBackgroundAlpha = .3,
+                highlightSeriesOpts = list(strokeWidth = 3.5)) %>%
+    dyAxis("y", axisLabelFormatter=JS(FUNC_JSFormatNumber), valueFormatter=JS(FUNC_JSFormatNumber)) %>%
+    dyOptions(colors = c("darkcyan", "darkred", 'black'),
+              drawGrid = FALSE,
+              fillGraph = TRUE,
+              strokeWidth = 3.5,
+              stackedGraph = TRUE)
 }
 
-# COUNTY DAILY CASES GRAPH
+# COUNTY ------ DAILY CASES GRAPH
 daily_cases_graph = function(covid19, FIP){
-  subset2 <- covid19 %>% filter(fips == FIP)
+  subset2 <- covid19 %>%
+    filter(fips == FIP)
 
   subset2 <- subset2 %>%
     group_by(state, date) %>%
     summarise(county = county, fips = fips, cases = sum(cases, na.rm = TRUE)) %>%
     mutate(new_cases = cases - lag(cases)) %>%
-    mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right'))
+    mutate(rolling_mean = rollmean(new_cases, 7, fill = NA, align = 'right')) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:240)
+  subset2 <- subset2 %>% rename(Date = date)
+  font = list(
+    family = 'Arial',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
 
-  gg_1 = ggplot(subset2, aes(x = date, y = new_cases)) +
-    geom_col(col = 'aquamarine4', fill = 'aquamarine3') +
-    geom_line(aes(y = rolling_mean), col = "darkgreen", size = 0.5) +
-    labs(x = 'DATE',
-         y = 'DAILY CASES',
-         subtitle = 'Data Source: The New York Times') +
+  gg_1 = ggplot(subset2) +
+    geom_col(aes(x = Date, y = new_cases), fill = 'cadetblue') +
+    geom_line(aes(Date, y = rolling_mean), col = "dodgerblue4", size = 0.6) +
+    labs(x = '',
+         y = '') +
     theme_classic() +
-    theme(axis.text.x = element_text(size = 10),
-          axis.text.y = element_text(size = 10),
-          axis.title.x = element_text(size = 10),
-          axis.title.y = element_text(size = 10, hjust = 0.5),
-          plot.title = element_text(hjust = 0.5, size = 20),
-          plot.subtitle = element_text(size = 14),
-          legend.title = element_text(face = "bold", size = 10, hjust = 0.5),
-          legend.title.align = 0.5,
-          legend.text = element_text(face = "bold", size = 12))
-ggplotly(gg_1)
+    theme(axis.text.x = element_text(size = 8),
+          axis.text.y = element_text(size = 8))
+  ggplotly(gg_1, tooltip = c("x", "y")) %>%
+    style(hoverlabel = label) %>%
+    config(displayModeBar = FALSE)
 }
 
+daily_deaths_graph = function(covid19, FIP){
+  # NEW DEATHS --- COUNTY
+  subset3 <- covid19 %>% filter(fips == FIP)
 
+  subset3 <- subset3 %>%
+    group_by(state, date) %>%
+    summarise(county = county, fips = fips, deaths = sum(deaths, na.rm = TRUE)) %>%
+    mutate(new_deaths = deaths - lag(deaths)) %>%
+    mutate(rolling_mean = rollmean(new_deaths, 7, fill = NA, align = 'right')) %>%
+    filter(new_deaths >= 0, rolling_mean >= 0) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:240)
+  # subset3 <- subset3 %>% rename("Daily deaths" = new_deaths, "Rolling mean" = rolling_mean, Date = date)
+  subset3 <- subset3 %>% rename(Date = date)
+  font = list(
+    family = 'Arial',
+    size = 15,
+    color = 'white')
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+  gg_1 = ggplot(subset3) +
+    geom_col(aes(Date, new_deaths),fill = 'tomato3', alpha = 0.5) +
+    geom_line(aes(Date, y = rolling_mean), col = "darkred", size = 0.6) +
+    labs(x = '',
+         y = '') +
+    # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+    theme_classic() +
+    theme(axis.text.x = element_text(size = 8),
+          axis.text.y = element_text(size = 8))
+  ggplotly(gg_1, tooltip = c("x", "y")) %>%
+    style(hoverlabel = label) %>%
+    config(displayModeBar = FALSE)
+
+}
 total_cases_graph = function(covid19, FIP){
   subset4 <- covid19 %>% filter(fips == FIP)
 
@@ -247,7 +303,6 @@ total_cases_graph = function(covid19, FIP){
           legend.title = element_text(face = "bold", size = 10, hjust = 0.5),
           legend.title.align = 0.5,
           legend.text = element_text(face = "bold", size = 12))
-
   ggplotly(gg_3)
 
 }
@@ -269,40 +324,67 @@ total_deaths_graph = function(covid19, FIP){
           legend.title = element_text(face = "bold", size = 10, hjust = 0.5),
           legend.title.align = 0.5,
           legend.text = element_text(face = "bold", size = 12))
-
   ggplotly(gg_3)
 
 }
 
-daily_deaths_graph = function(covid19, FIP){
-  # NEW DEATHS --- COUNTY
-  subset3 <- covid19 %>% filter(fips == FIP)
+# ------------------------------------------
+# ---------- COUNTRY LEVEL GRAPHS ----------
+# ------------------------------------------
 
-  subset3 <- subset3 %>%
-    group_by(state, date) %>%
-    summarise(county = county, fips = fips, deaths = sum(deaths, na.rm = TRUE)) %>%
-    mutate(new_deaths = deaths - lag(deaths)) %>%
-    mutate(rolling_mean = rollmean(new_deaths, 7, fill = NA, align = 'right')) %>%
-    filter(new_deaths >= 0, rolling_mean >= 0)
+usa_total_cases = function(covid19){
+  total_cases <- covid19 %>%
+    group_by(date) %>%
+    summarize(cases = sum(cases, na.rm = TRUE)) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:320) %>%
+    rename(Date = date)
 
-  gg_1 = ggplot(subset3, aes(x = date, y = new_deaths)) +
-    geom_col(col = 'aquamarine4', fill = 'aquamarine3') +
-    geom_line(aes(y = rolling_mean), col = "darkgreen", size = 0.5) +
-    labs(x = 'DATE',
-         y = 'DEATHS') +
+  usa_cases = ggplot(total_cases) +
+    geom_col(aes(x = Date, y = cases), fill = 'skyblue3',
+             # col = 'black',
+             # size = 0.1,
+             alpha = 0.6) +
+    labs(x = '',
+         y = '') +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, NA), labels = comma) +
     theme_classic() +
-    theme(axis.text.x = element_text(size = 10),
-          axis.text.y = element_text(size = 10),
-          axis.title.x = element_text(size = 10),
-          axis.title.y = element_text(size = 10, hjust = 0.5),
-          plot.title = element_text(hjust = 0.5, size = 20),
-          plot.subtitle = element_text(size = 14),
-          legend.title = element_text(face = "bold", size = 10, hjust = 0.5),
-          legend.title.align = 0.5,
-          legend.text = element_text(face = "bold", size = 12))
-  ggplotly(gg_1)
+    theme(axis.text.x = element_text(size = 8),
+          axis.text.y = element_text(size = 8))
+  ggplotly(usa_cases, tooltip = c("x", "y")) %>%
+    style(hoverlabel = label) %>%
+    config(displayModeBar = FALSE)
 
 }
+# TOTAL DEATHS --- USA
+usa_total_deaths = function(covid19){
+  total_deaths <- covid19 %>%
+    group_by(date) %>%
+    summarize(deaths = sum(deaths, na.rm = TRUE)) %>%
+    arrange(desc(date)) %>%
+    slice(n = 1:320) %>%
+    rename(Date = date)
+
+  usa_deaths = ggplot(total_deaths) +
+    geom_col(aes(x = Date, y = deaths), fill = 'tomato3',
+             # col = "darkred",
+             # size = 0.1,
+             alpha = 0.5) +
+    labs(x = '',
+         y = '') +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, NA), labels = comma) +
+    theme_classic() +
+    theme(axis.text.x = element_text(size = 8),
+          axis.text.y = element_text(size = 8))
+  ggplotly(usa_deaths, tooltip = c("x", "y")) %>%
+    style(hoverlabel = label) %>%
+    config(displayModeBar = FALSE)
+
+}
+
+# ------------------------------------------
+# ----------- VALUE BOXES ------------------
+# ------------------------------------------
 
 cases_info = function(covid19){
   subset3 <- covid19 %>%

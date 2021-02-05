@@ -14,12 +14,10 @@ basemap  <-  basemap(today)
 
 
 ui <- dashboardPage(
-  shinyDashboardThemes(
-    theme = "grey_dark"
-    ),
   dashboardHeader(title = "COVID-19 Dashboard"),
   dashboardSidebar(disable = TRUE),
   dashboardBody(
+    shinyDashboardThemes(theme ="blue_gradient"),
     fluidRow(
       column(width = 7,
              autocomplete_input("auto", "Search for a County:",
@@ -28,30 +26,37 @@ ui <- dashboardPage(
                                 structure(today$fips, names = today$name)),
              box(width = NULL, solidHeader = TRUE,
                  leafletOutput("covidMap", height = 650)),
-             box(width = NULL, title = "Statistics",
-                 solidHeader = TRUE,
-                 DTOutput('covidTable'))
+             valueBoxOutput("totalCases"),
+             valueBoxOutput("totalDeaths"),
+             valueBoxOutput("deathRate")
 
       ),
 
       column(width = 4,
-             box(width = NULL, status = "primary",
-                 title = "TOTAL CASES/DEATHS",
-                 solidHeader = TRUE,
-                 dygraphOutput('covidGraph')),
+             # box(width = NULL, status = "primary",
+             #     title = "TOTAL CASES/DEATHS",
+             #     solidHeader = TRUE,
+             #     dygraphOutput('covidGraph')),
              # box(width = NULL, status = "primary",
              #     title = "NEW CASES",
              #     solidHeader = TRUE,
              #     plotlyOutput("covidNewCases")),
-             tabBox(width = NULL,
-             title = "Sample box",
+             tabBox(side = "right",
+                    title = "COUNTY STATISTICS",
+                    width = NULL,
+                    tabPanel("Cumaltive Cases/Deaths", dygraphOutput('covidGraph')),
                 tabPanel("Daily Cases", plotlyOutput("covidNewCases")),
                 tabPanel("Daily Deaths", plotlyOutput("covidNewDeaths")),
-                tabPanel("Cumulative Cases", plotlyOutput("covidTotalCases")),
-                tabPanel("Cumulative Deaths", plotlyOutput("covidTotalDeaths"))),
-             valueBoxOutput("totalCases"),
-             valueBoxOutput("totalDeaths"),
-             valueBoxOutput("deathRate")
+                tabPanel("Chart", DTOutput('covidTable'))),
+             tabBox(title = "COUNTRY STATISTICS",
+                    side = "right",
+                      width = NULL,
+                    tabPanel("Cumulative Cases", plotlyOutput("covidTotalCases")),
+                    tabPanel("Cumulative Deaths", plotlyOutput("covidTotalDeaths")),
+                    tabPanel("Statistics")),
+             # valueBoxOutput("totalCases"),
+             # valueBoxOutput("totalDeaths"),
+             # valueBoxOutput("deathRate")
              # infoBox("Total cases", icon = icon("credit-card"), fill = TRUE),
 
       )
@@ -73,8 +78,8 @@ server <- function(input, output, session) {
   output$covidTable = renderDT({ make_table2(today, FIP) })
   output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
   output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
-  output$covidTotalCases = renderPlotly({ total_cases_graph(covid19, FIP) })
-  output$covidTotalDeaths = renderPlotly({ total_deaths_graph(covid19, FIP) })
+  output$covidTotalCases = renderPlotly({ usa_total_cases(covid19) })
+  output$covidTotalDeaths = renderPlotly({ usa_total_deaths(covid19) })
   output$totalCases <- renderValueBox({
     valueBox(
       paste0((cases_info(covid19)[2])),
@@ -109,11 +114,10 @@ server <- function(input, output, session) {
     output$covidTable = renderDT({ make_table2(today, FIP) })
     output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
     output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
-    output$covidTotalCases = renderPlotly({ total_cases_graph(covid19, FIP) })
-    output$covidTotalDeaths = renderPlotly({ total_deaths_graph(covid19, FIP) })
 
 
   })
+
 
   observe(
     if(input$auto == ""){
@@ -125,11 +129,12 @@ server <- function(input, output, session) {
       output$covidTable <- renderDT({ make_table2(today, FIP) })
       output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
       output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
-      output$covidTotalCases = renderPlotly({ total_cases_graph(covid19, FIP) })
-      output$covidTotalDeaths = renderPlotly({ total_deaths_graph(covid19, FIP) })
     })
 
 
 }
 
 shinyApp( ui, server )
+
+
+
