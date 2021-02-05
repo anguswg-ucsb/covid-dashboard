@@ -12,7 +12,11 @@ today    <-  today_centroids(counties, covid19)
 basemap  <-  basemap(today)
 
 
+
 ui <- dashboardPage(
+  shinyDashboardThemes(
+    theme = "grey_dark"
+    ),
   dashboardHeader(title = "COVID-19 Dashboard"),
   dashboardSidebar(disable = TRUE),
   dashboardBody(
@@ -35,10 +39,16 @@ ui <- dashboardPage(
                  title = "TOTAL CASES/DEATHS",
                  solidHeader = TRUE,
                  dygraphOutput('covidGraph')),
-             box(width = NULL, status = "primary",
-                 title = "NEW CASES",
-                 solidHeader = TRUE,
-                 plotlyOutput("covidPlotly")),
+             # box(width = NULL, status = "primary",
+             #     title = "NEW CASES",
+             #     solidHeader = TRUE,
+             #     plotlyOutput("covidNewCases")),
+             tabBox(width = NULL,
+             title = "Sample box",
+                tabPanel("Daily Cases", plotlyOutput("covidNewCases")),
+                tabPanel("Daily Deaths", plotlyOutput("covidNewDeaths")),
+                tabPanel("Cumulative Cases", plotlyOutput("covidTotalCases")),
+                tabPanel("Cumulative Deaths", plotlyOutput("covidTotalDeaths"))),
              valueBoxOutput("totalCases"),
              valueBoxOutput("totalDeaths"),
              valueBoxOutput("deathRate")
@@ -61,7 +71,10 @@ server <- function(input, output, session) {
   output$covidMap     <- renderLeaflet({ basemap })
   output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
   output$covidTable = renderDT({ make_table2(today, FIP) })
-  output$covidPlotly = renderPlotly({ make_graph2(covid19, FIP) })
+  output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
+  output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
+  output$covidTotalCases = renderPlotly({ total_cases_graph(covid19, FIP) })
+  output$covidTotalDeaths = renderPlotly({ total_deaths_graph(covid19, FIP) })
   output$totalCases <- renderValueBox({
     valueBox(
       paste0((cases_info(covid19)[2])),
@@ -94,7 +107,11 @@ server <- function(input, output, session) {
     output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
     leafletProxy('covidMap') %>% zoom_to_county(counties, FIP)
     output$covidTable = renderDT({ make_table2(today, FIP) })
-    output$covidPlotly = renderPlotly({ make_graph2(covid19, FIP) })
+    output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
+    output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
+    output$covidTotalCases = renderPlotly({ total_cases_graph(covid19, FIP) })
+    output$covidTotalDeaths = renderPlotly({ total_deaths_graph(covid19, FIP) })
+
 
   })
 
@@ -106,7 +123,10 @@ server <- function(input, output, session) {
       leafletProxy("covidMap") %>% zoom_to_county(counties, FIP)
       output$covidChart <- renderDygraph({ make_graph(covid19, FIP) })
       output$covidTable <- renderDT({ make_table2(today, FIP) })
-      output$covidPlotly = renderPlotly({ make_graph2(covid19, FIP) })
+      output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
+      output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
+      output$covidTotalCases = renderPlotly({ total_cases_graph(covid19, FIP) })
+      output$covidTotalDeaths = renderPlotly({ total_deaths_graph(covid19, FIP) })
     })
 
 
