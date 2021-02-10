@@ -11,6 +11,10 @@ covid19  <-  read_covid19()
 today    <-  today_centroids(counties, covid19)
 basemap  <-  basemap(today)
 
+today_2 <- today_centroids_2(counties, pop, covid19)
+basemap_2 <- roll_mean_map(today_2)
+
+
 
 
 ui <- dashboardPage(
@@ -19,20 +23,21 @@ ui <- dashboardPage(
   dashboardBody(
     shinyDashboardThemes(theme ="blue_gradient"),
     fluidRow(
-      column(width = 7,
+      column(width = 6,
              autocomplete_input("auto", "Search for a County:",
                                 value = "",
                                 max_options = 5,
                                 structure(today$fips, names = today$name)),
-             box(width = NULL, solidHeader = TRUE,
-                 leafletOutput("covidMap", height = 650)),
+             tabBox(width = NULL,
+                    tabPanel("Total cases", leafletOutput("covidMap", height = 650)),
+                    tabPanel("Daily cases per 100k", leafletOutput("covidMap2", height = 650))),
              valueBoxOutput("totalCases"),
              valueBoxOutput("totalDeaths"),
              valueBoxOutput("deathRate")
 
       ),
 
-      column(width = 4,
+      column(width = 5,
              # box(width = NULL, status = "primary",
              #     title = "TOTAL CASES/DEATHS",
              #     solidHeader = TRUE,
@@ -44,20 +49,19 @@ ui <- dashboardPage(
              tabBox(side = "right",
                     title = "COUNTY STATISTICS",
                     width = NULL,
-                    tabPanel("Cumaltive Cases/Deaths", dygraphOutput('covidGraph')),
+                tabPanel("Cumaltive Cases/Deaths", dygraphOutput('covidGraph')),
                 tabPanel("Daily Cases", plotlyOutput("covidNewCases")),
                 tabPanel("Daily Deaths", plotlyOutput("covidNewDeaths")),
                 tabPanel("Chart", DTOutput('covidTable'))),
-             tabBox(title = "COUNTRY STATISTICS",
+             tabBox(title = "USA STATISTICS",
                     side = "right",
                       width = NULL,
                     tabPanel("Cumulative Cases", plotlyOutput("covidTotalCases")),
-                    tabPanel("Cumulative Deaths", plotlyOutput("covidTotalDeaths")),
-                    tabPanel("Statistics")),
+                    tabPanel("Cumulative Deaths", plotlyOutput("covidTotalDeaths")))
              # valueBoxOutput("totalCases"),
              # valueBoxOutput("totalDeaths"),
              # valueBoxOutput("deathRate")
-             # infoBox("Total cases", icon = icon("credit-card"), fill = TRUE),
+
 
       )
     )
@@ -74,6 +78,7 @@ server <- function(input, output, session) {
   #              href = "https://anguswg-ucsb.github.io/geog176A.html")
   # })
   output$covidMap     <- renderLeaflet({ basemap })
+  output$covidMap2     <- renderLeaflet({ basemap_2 })
   output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
   output$covidTable = renderDT({ make_table2(today, FIP) })
   output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
@@ -118,19 +123,31 @@ server <- function(input, output, session) {
 
   })
 
+  observeEvent(input$covidMap2_marker_click, {
+    FIP <<- input$covidMap2_marker_click$id
+    output$covidGraph = renderDygraph({ make_graph(covid19, FIP) })
+    leafletProxy('covidMap2') %>% zoom_to_county(counties, FIP)
+    output$covidTable = renderDT({ make_table2(today, FIP) })
+    output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
+    output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
+
+
+  })
 
   observe(
     if(input$auto == ""){
       NULL
     } else {
       FIP <<- input$auto
-      leafletProxy("covidMap") %>% zoom_to_county(counties, FIP)
+      leafletProxy("covidMap") %>%
+        zoom_to_county(counties, FIP)
       output$covidChart <- renderDygraph({ make_graph(covid19, FIP) })
       output$covidTable <- renderDT({ make_table2(today, FIP) })
       output$covidNewCases = renderPlotly({ daily_cases_graph(covid19, FIP) })
       output$covidNewDeaths <- renderPlotly({ daily_deaths_graph(covid19, FIP) })
+      leafletProxy("covidMap2") %>%
+          zoom_to_county(counties, FIP)
     })
-
 
 }
 

@@ -56,6 +56,10 @@ library(shinydashboard)
 ########## FUNCTIONS ###########
 #Load Spatial Data
 counties = readRDS("counties.rds")
+pop = readxl::read_excel('PopulationEstimates.xls', skip = 2) %>%
+  select(state = State, pop_19 = POP_ESTIMATE_2019, fips = FIPStxt)
+pop$fips <- as.numeric(pop$fips)
+
 
 font = list(
   family = 'Arial',
@@ -80,7 +84,33 @@ today_centroids = function(counties, covid_data){
   filter(covid_data, date == max(date)) %>%
     left_join(st_centroid(counties), by = 'fips') %>%
     na.omit() %>%
-    mutate(size = abs(cases - mean(cases)) / sd(cases)) %>%
+    mutate(size = abs(cases - mean(cases)) / sd(cases), size2 = abs(deaths - mean(deaths)) / sd(deaths)) %>%
+    st_as_sf()
+}
+
+today_centroids_2 <- function(counties, pop, covid19) {
+  rollmean_map <- covid19 %>%
+    left_join(st_centroid(counties), by = 'fips') %>%
+    na.omit()
+  rollmean_map <- rollmean_map %>%
+    group_by(county, state) %>%
+    filter(date > max(date) - 8) %>%
+    arrange(date) %>%
+    mutate(new_cases = cases - lag(cases))
+  rollmean_map = inner_join(rollmean_map, select(pop, pop_19, fips), by = 'fips')
+  rollmean_map <- rollmean_map %>%
+    mutate(cases_per_100k = (new_cases /pop_19)*100000) %>%
+    na.omit() %>%
+    mutate(rmean_new = rollmean(new_cases, 7, fill = NA, align = 'right'),
+           rmean_percap = rollmean(cases_per_100k, 7, fill = NA, align = 'right')) %>%
+    na.omit()
+  rollmean_map <- rollmean_map %>%
+    filter(rmean_new >= 0.0,
+           rmean_percap >= 0.0) %>%
+    ungroup() %>%
+    mutate(size2 = abs(rmean_new - mean(rmean_new)) / sd(rmean_new),
+           size3 = abs(rmean_percap - mean(rmean_percap)) / sd(rmean_percap)) %>%
+    filter(state != "Alaska") %>%
     st_as_sf()
 }
 
@@ -103,6 +133,28 @@ basemap = function(today){
               pal = pal2,
               values = ~cases,
               title = paste("COVID Cases\n", max(today$date)),
+              opacity = 1) %>%
+    setView(lng = -98, lat= 38, zoom = 4)
+}
+
+roll_mean_map <- function(today_2) {
+  pal3 = colorNumeric("viridis", reverse= TRUE, domain = today_2$size3)
+  pal4 <- colorNumeric("viridis", reverse = TRUE, domain = today_2$rmean_percap)
+  leaflet(data = today_2) %>%
+    addProviderTiles(providers$CartoDB.Positron) %>%
+    addScaleBar("bottomleft") %>%
+    addCircleMarkers(
+      fillColor = ~pal3(size3),
+      color = 'black',
+      weight = 0.2,
+      fillOpacity = 0.5,
+      radius = ~size3*2,
+      layerId = ~fips,
+      label   = ~name) %>%
+    addLegend("bottomright",
+              pal = pal4,
+              values = ~rmean_percap,
+              title = paste("New cases/100k \n", max(today_2$date)),
               opacity = 1) %>%
     setView(lng = -98, lat= 38, zoom = 4)
 }
@@ -166,9 +218,10 @@ make_table2 = function(today, FIP){
     mutate(DeathRate = paste0(100* round(Deaths/Cases,2), "%")) %>%
     head(10)
 
+  datatable(mydata, options = list(paging = FALSE, searching = FALSE))
   # Make an interactive Table! with a caption
-  datatable(mydata, caption = paste('COVID-19 Statistics', myfips$state, myfips$date),
-            options = list(paging = FALSE, searching = FALSE))
+  # datatable(mydata, caption = paste('COVID-19 Statistics', myfips$state, myfips$date),
+  #           options = list(paging = FALSE, searching = FALSE))
 }
 
 make_table_2 = function(today, FIP){
@@ -231,7 +284,9 @@ daily_cases_graph = function(covid19, FIP){
   font = list(
     family = 'Arial',
     size = 15,
-    color = 'white')
+    color = 'white',
+    font = 2
+  )
   label = list(
     bgcolor = '#232F34',
     bordercolor = 'transparent',
@@ -242,11 +297,13 @@ daily_cases_graph = function(covid19, FIP){
     geom_line(aes(Date, y = rolling_mean), col = "dodgerblue4", size = 0.6) +
     labs(x = '',
          y = '') +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, NA), labels = comma) +
     theme_classic() +
-    theme(axis.text.x = element_text(size = 8),
-          axis.text.y = element_text(size = 8))
+    theme(axis.text.x = element_text(size = 11),
+          axis.text.y = element_text(size = 11))
   ggplotly(gg_1, tooltip = c("x", "y")) %>%
     style(hoverlabel = label) %>%
+    layout(font = font) %>%
     config(displayModeBar = FALSE)
 }
 
@@ -267,7 +324,9 @@ daily_deaths_graph = function(covid19, FIP){
   font = list(
     family = 'Arial',
     size = 15,
-    color = 'white')
+    color = 'white',
+    font = 2
+  )
   label = list(
     bgcolor = '#232F34',
     bordercolor = 'transparent',
@@ -277,15 +336,18 @@ daily_deaths_graph = function(covid19, FIP){
     geom_line(aes(Date, y = rolling_mean), col = "darkred", size = 0.6) +
     labs(x = '',
          y = '') +
-    # scale_y_continuous(expand = c(0, 0), limits = c(0, NA)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, NA), labels = comma) +
     theme_classic() +
-    theme(axis.text.x = element_text(size = 8),
-          axis.text.y = element_text(size = 8))
+    theme(axis.text.x = element_text(size = 11),
+          axis.text.y = element_text(size = 11))
   ggplotly(gg_1, tooltip = c("x", "y")) %>%
     style(hoverlabel = label) %>%
+    layout(font = font) %>%
     config(displayModeBar = FALSE)
 
 }
+
+
 total_cases_graph = function(covid19, FIP){
   subset4 <- covid19 %>% filter(fips == FIP)
 
@@ -340,6 +402,17 @@ usa_total_cases = function(covid19){
     slice(n = 1:320) %>%
     rename(Date = date)
 
+  font = list(
+    family = 'Arial',
+    size = 15,
+    color = 'white',
+    font = 2
+    )
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+
   usa_cases = ggplot(total_cases) +
     geom_col(aes(x = Date, y = cases), fill = 'skyblue3',
              # col = 'black',
@@ -349,10 +422,11 @@ usa_total_cases = function(covid19){
          y = '') +
     scale_y_continuous(expand = c(0, 0), limits = c(0, NA), labels = comma) +
     theme_classic() +
-    theme(axis.text.x = element_text(size = 8),
-          axis.text.y = element_text(size = 8))
+    theme(axis.text.x = element_text(size = 11),
+          axis.text.y = element_text(size = 11))
   ggplotly(usa_cases, tooltip = c("x", "y")) %>%
     style(hoverlabel = label) %>%
+    layout(font = font) %>%
     config(displayModeBar = FALSE)
 
 }
@@ -365,6 +439,17 @@ usa_total_deaths = function(covid19){
     slice(n = 1:320) %>%
     rename(Date = date)
 
+  font = list(
+    family = 'Arial',
+    size = 15,
+    color = 'white',
+    font = 2
+  )
+  label = list(
+    bgcolor = '#232F34',
+    bordercolor = 'transparent',
+    font = font)
+
   usa_deaths = ggplot(total_deaths) +
     geom_col(aes(x = Date, y = deaths), fill = 'tomato3',
              # col = "darkred",
@@ -374,10 +459,11 @@ usa_total_deaths = function(covid19){
          y = '') +
     scale_y_continuous(expand = c(0, 0), limits = c(0, NA), labels = comma) +
     theme_classic() +
-    theme(axis.text.x = element_text(size = 8),
-          axis.text.y = element_text(size = 8))
+    theme(axis.text.x = element_text(size = 11),
+          axis.text.y = element_text(size = 11))
   ggplotly(usa_deaths, tooltip = c("x", "y")) %>%
     style(hoverlabel = label) %>%
+    layout(font = font) %>%
     config(displayModeBar = FALSE)
 
 }
