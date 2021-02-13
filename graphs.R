@@ -13,7 +13,7 @@ df2 = filter(today, state == df1$state) %>%
   select(County = county, Cases = cases, Deaths = deaths) %>%
   mutate(DeathRate = paste0(100* round(Deaths/Cases,2), "%")) %>%
   head(10)
-formattable(df2, align = c("l", rep("r", NCOL(df2) - 1)),  list(`County` = formatter("span", style = ~ style(color = "azure1",font.weight = "bold")), `Cases` = color_tile("cornsilk", "darkgoldenrod1"), `Deaths` = color_tile("lightpink", "tomato"), `DeathRate` = formatter("span", style = ~ style(color = "azure1",font.weight = "bold"))))
+as.datatable(formattable(df2, align = c("l", rep("r", NCOL(df2) - 1)),  list(`County` = formatter("span", style = ~ style(color = "azure1",font.weight = "bold")), `Cases` = color_tile("cornsilk", "darkgoldenrod1"), `Deaths` = color_tile("lightpink", "tomato"), `DeathRate` = formatter("span", style = ~ style(color = "azure1",font.weight = "bold")))))
 class(df3)
 
 counties = readRDS("counties.rds")
